@@ -1,4 +1,4 @@
-import EventEmitterNode from "events";
+import NodeEventEmitter from "events";
 import Private from "@simpo/private";
 import {makeArray} from "./util";
 import isSymbol from "lodash/isSymbol";
@@ -7,7 +7,7 @@ const $private = new Private();
 
 export default class Event {}
 
-export class EventEmitter extends EventEmitterNode {
+export class EventEmitter extends NodeEventEmitter {
 	constructor(...params) {
 		super(...params);
 		$private.set(this, 'bindEmitterAction', (eventNames, action, ...params)=>{
@@ -20,11 +20,11 @@ export class EventEmitter extends EventEmitterNode {
 		return this.on(...params);
 	}
 
-	emitSync(eventNames, ...params) {
+	emit(eventNames, ...params) {
 		return $private.invoke(this, 'bindEmitterAction', eventNames, 'emit', ...params);
 	}
 
-	async emit(eventName, ...params) {
+	async emitAsync(eventName, ...params) {
 		const eventNames = makeArray(eventName);
 		let hasListeners = false;
 		for (let eventsNo=0; eventsNo<eventNames.length; eventsNo++) {
