@@ -1,5 +1,5 @@
-# Simpo-router
-Koa Component/Controller router
+# async-event-emitter
+Async event-emitter extended from node version
 
 # Notes
 Uses experiential .mjs files.  We will add a build step at some point to support CJS format.
