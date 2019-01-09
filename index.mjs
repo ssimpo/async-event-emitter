@@ -1,18 +1,55 @@
-import NodeEventEmitter from "events";
 import Private from "@simpo/private";
 import {makeArray} from "./util";
 import isSymbol from "lodash/isSymbol";
+import pull from "lodash/pull";
 
 const $private = new Private();
+const defaultNamespace = {};
+const PARENT = Symbol('Target Parents');
+const CHILDREN = Symbol('Target Children');
 
 export default class Event {}
 
-export class EventEmitter extends NodeEventEmitter {
-	constructor(...params) {
-		super(...params);
-		$private.set(this, 'bindEmitterAction', (eventNames, action, ...params)=>{
-			makeArray(eventNames).forEach(eventName=>super[action](eventName, ...params));
-			return this;
+function getListeners(namespace, target, eventName) {
+	if (!$private.has(namespace, target)) $private.set(namespace, target, new WeakMap());
+	const store = $private.get(namespace, target);
+	if (!store.has(target)) store.set(target, new Map());
+	const allListeners = store.get(target);
+	if (!allListeners.has(eventName)) allListeners.set(eventName, []);
+	return allListeners.get(eventName);
+}
+
+export class GlobalEventEmitter {
+	constructor(options={}) {
+		const {namespace=defaultNamespace} = options;
+		$private.set(this, 'namespace', namespace);
+	}
+
+	addParent(target, ...parent) {
+		parent.forEach(parent=>{
+			this.listeners(target, PARENT).push(parent);
+			this.listeners(parent, CHILDREN).push(target);
+		});
+	}
+
+	addChild(target, ...child) {
+		child.forEach(child=>{
+			this.listeners(target, CHILDREN).push(child);
+			this.listeners(child, PARENT).push(target);
+		});
+	}
+
+	removeParent(target, ...parent) {
+		parent.forEach(parent=>{
+			pull(this.listeners(target, PARENT), parent);
+			pull(this.listeners(parent, CHILDREN), target);
+		});
+	}
+
+	removeChild(target, ...child) {
+		child.forEach(child=>{
+			pull(this.listeners(target, CHILDREN), child);
+			pull(this.listeners(child, PARENT), target);
 		});
 	}
 
@@ -20,79 +57,149 @@ export class EventEmitter extends NodeEventEmitter {
 		return this.on(...params);
 	}
 
-	emit(eventNames, ...params) {
-		return $private.invoke(this, 'bindEmitterAction', eventNames, 'emit', ...params);
+	emit(target, eventName, ...params) {
+		makeArray(eventName).forEach(eventName=>{
+			this.listeners(target, eventName).forEach(listener=>listener(...params));
+			this.listeners(target, PARENT).forEach(parent=>this.emit(parent, eventName, ...params));
+		});
+		return this;
 	}
 
-	async emitAsync(eventName, ...params) {
+	async emitAsync(target, eventName, ...params) {
 		const eventNames = makeArray(eventName);
+		const parent = $private.get(this, PARENT, []);
 		let hasListeners = false;
 		for (let eventsNo=0; eventsNo<eventNames.length; eventsNo++) {
-			const listeners = this.listeners(eventNames[eventsNo]);
+			const listeners = this.listeners(target, eventNames[eventsNo]);
 			hasListeners = hasListeners || !!listeners.length;
 			for (let n=0; n<listeners.length; n++) await Promise.resolve(listeners[n](...params));
+			for (let n=0; n<parent.length; n++) await this.emitAsync(parent[n], eventNames[eventsNo], ...params);
 		}
+
 		return hasListeners;
 	}
 
-	mirror(eventNames, source) {
-		let listeners = [];
-		makeArray(eventNames).forEach(eventName=>{
-			const listener = (...params)=>this.emit(eventName, ...params);
-			source.on(eventName, listener);
-			listeners.push([eventName, listener]);
-		});
-
-		return ()=>{
-			listeners.forEach(([eventName, listener])=>source.removeListener(eventName, listener));
-			listeners = [];
+	listeners(target, eventName) {
+		if (!Array.isArray(eventName) && !(eventName instanceof Set)) {
+			return getListeners($private.get(this, 'namespace'), target, eventName);
 		}
-	}
-
-	mirrorTo(eventNames, destination) {
-		let listeners = [];
-		makeArray(eventNames).forEach(eventName=>{
-			const listener = (...params)=>destination.emit(eventName, ...params);
-			this.on(eventName, listener);
-			listeners.push([eventName, listener]);
-		});
-
-		return ()=>{
-			listeners.forEach(([eventName, listener])=>source.removeListener(eventName, listener));
-			listeners = [];
-		}
+		return makeArray(eventName).map(eventName=>this.listeners(target, eventName));
 	}
 
 	off(...params) {
 		return this.removeListener(...params);
 	}
 
-	on(eventNames, listener) {
-		return $private.invoke(this, 'bindEmitterAction', eventNames, 'on', listener);
+	on(target, eventName, ...listener) {
+		makeArray(eventName).forEach(eventName=>this.listeners(target, eventName).push(...listener));
+		return this;
 	}
 
-	once(eventNames, listener) {
-		return $private.invoke(this, 'bindEmitterAction', eventNames, 'once', listener);
+	once(target, eventName, ...listener) {
+		let once = (...params)=>{
+			this.removeListener(target, eventName, once);
+			once = undefined;
+			listener.forEach(listener=>listener(...params))
+		};
+		this.on(target, eventName, once);
+		return this;
 	}
 
-	removeListener(eventNames, listener) {
-		return $private.invoke(this, 'bindEmitterAction', eventNames, 'off', listener);
+	removeListener(target, eventName, ...listener) {
+		makeArray(eventName).forEach(eventName=>pull(this.listeners(target, eventName), ...listener));
+		return this;
 	}
 
-	prependListener(eventNames, listener) {
-		return $private.invoke(this, 'bindEmitterAction', eventNames, 'prependListener', listener);
+	prependListener(target, eventName, ...listener) {
+		makeArray(eventName).forEach(eventName=>this.listeners(target, eventName).unshift(...listener));
+		return this;
 	}
 
-	prependOnceListener(eventNames, listener) {
-		return $private.invoke(this, 'bindEmitterAction', eventNames, 'prependOnceListener', listener);
+	prependOnceListener(target, eventName, ...listener) {
+		let once = (...params)=>{
+			this.removeListener(target, eventName, once);
+			once = undefined;
+			listener.forEach(listener=>listener(...params))
+		};
+		this.prependListener(target, eventName, once);
+		return this;
 	}
 
-	get maxListeners() {
+	/*get maxListeners() {
 		return this.getMaxListeners();
 	}
 
 	set maxListeners(n) {
 		this.setMaxListeners(n);
 		return true;
+	}*/
+}
+
+export class EventEmitter {
+	constructor(options={}) {
+		const {namespace=defaultNamespace, target=this, parent} = options;
+		const emitter = new GlobalEventEmitter({namespace});
+		const parents = makeArray(parent);
+		$private.set(this, 'namespace', namespace);
+		$private.set(this, 'emitter', emitter);
+		$private.set(this, 'target', target);
+		$private.set(this, 'parent', parents);
+		emitter.addParent(target, ...parents);
+	}
+
+	addParent(...params) {
+		return $private.get(this, 'emitter').addParent($private.get(this, 'target'), ...params);
+	}
+
+	addChild(...params) {
+		return $private.get(this, 'emitter').addChild($private.get(this, 'target'), ...params);
+	}
+
+	removeParent(...params) {
+		return $private.get(this, 'emitter').removeParent($private.get(this, 'target'), ...params);
+	}
+
+	removeChild(...params) {
+		return $private.get(this, 'emitter').removeChild($private.get(this, 'target'), ...params);
+	}
+
+	addListener(...params) {
+		return this.on(...params);
+	}
+
+	emit(...params) {
+		return $private.get(this, 'emitter').emit($private.get(this, 'target'), ...params);
+	}
+
+	emitAsync(...params) {
+		return $private.get(this, 'emitter').emitAsync($private.get(this, 'target'), ...params);
+	}
+
+	listeners(...params) {
+		return $private.get(this, 'emitter').listeners($private.get(this, 'target'), ...params);
+	}
+
+	off(...params) {
+		return this.removeListener(...params);
+	}
+
+	on(...params) {
+		return $private.get(this, 'emitter').on($private.get(this, 'target'), ...params);
+	}
+
+	once(...params) {
+		return $private.get(this, 'emitter').once($private.get(this, 'target'), ...params);
+	}
+
+	removeListener(...params) {
+		return $private.get(this, 'emitter').removeListener($private.get(this, 'target'), ...params);
+	}
+
+	prependListener(...params) {
+		return $private.get(this, 'emitter').prependListener($private.get(this, 'target'), ...params);
+	}
+
+	prependOnceListener(...params) {
+		return $private.get(this, 'emitter').prependOnceListener($private.get(this, 'target'), ...params);
 	}
 }
