@@ -2,13 +2,41 @@ import Private from "@simpo/private";
 import {makeArray} from "./util";
 import isSymbol from "lodash/isSymbol";
 import pull from "lodash/pull";
+import isObject from "lodash/isObject";
 
 const $private = new Private();
 const defaultNamespace = {};
 const PARENT = Symbol('Target Parents');
 const CHILDREN = Symbol('Target Children');
 
-export default class Event {}
+export default class Event {
+	constructor(options={}) {
+		const {bubbling=true, target} = options;
+		$private.set(this, 'bubbling', bubbling);
+		$private.set(this, 'target', target);
+		$private.set(this, 'stopped', false);
+	}
+
+	cancelEvent() {
+		$private.set(this, 'stopped', true);
+	}
+
+	stopBubbling() {
+		$private.set(this, 'bubbling', false);
+	}
+
+	get bubbling() {
+		return $private.get(this, 'bubbling');
+	}
+
+	get stopped() {
+		return $private.get(this, 'stopped');
+	}
+
+	get target() {
+		return $private.get(this, 'target');
+	}
+};
 
 function getListeners(namespace, target, eventName) {
 	if (!$private.has(namespace, target)) $private.set(namespace, target, new WeakMap());
@@ -17,6 +45,51 @@ function getListeners(namespace, target, eventName) {
 	const allListeners = store.get(target);
 	if (!allListeners.has(eventName)) allListeners.set(eventName, []);
 	return allListeners.get(eventName);
+}
+
+function getStoppedFunc(...params) {
+	return !isObject(params[0])?()=>false:()=>{
+		if (!('stopped' in params[0])) return false;
+		return params[0].stopped;
+	};
+}
+
+function emit({emitter, target, eventName, params, direction='up'}) {
+	const {bubbling=true} = !isObject(params[0])?{}:params[0];
+	const stopped = getStoppedFunc(...params);
+	const NEXT = ((direction==='up')?PARENT:((direction==='down')?CHILDREN:undefined));
+
+	makeArray(eventName).forEach(eventName=>{
+		emitter.listeners(target, eventName).forEach(listener=>{
+			if (!stopped()) listener(...params);
+		});
+		if (!!NEXT && !stopped() && bubbling) {
+			emitter.listeners(target, NEXT).forEach(parent=>emitter.emit(parent, eventName, ...params));
+		}
+	});
+	return this;
+}
+
+async function emitAsync({emitter, target, eventName, params, direction='up'}) {
+	const {bubbling=true} = !isObject(params[0])?{}:params[0];
+	const eventNames = makeArray(eventName);
+	const stopped = getStoppedFunc(...params);
+	const NEXT = ((direction==='up')?PARENT:((direction==='down')?CHILDREN:undefined));
+	const parent = (!!NEXT?$private.get(emitter, NEXT, []):[]);
+
+	let hasListeners = false;
+	for (let eventsNo=0; eventsNo<eventNames.length; eventsNo++) {
+		const listeners = emitter.listeners(target, eventNames[eventsNo]);
+		hasListeners = hasListeners || !!listeners.length;
+		for (let n=0; n<listeners.length; n++) {
+			if (!stopped()) await Promise.resolve(listeners[n](...params));
+		}
+		if (!stopped() && bubbling) {
+			for (let n=0; n<parent.length; n++) await emitter.emitAsync(parent[n], eventNames[eventsNo], ...params);
+		}
+	}
+
+	return hasListeners;
 }
 
 export class GlobalEventEmitter {
@@ -57,26 +130,20 @@ export class GlobalEventEmitter {
 		return this.on(...params);
 	}
 
-	emit(target, eventName, ...params) {
-		makeArray(eventName).forEach(eventName=>{
-			this.listeners(target, eventName).forEach(listener=>listener(...params));
-			this.listeners(target, PARENT).forEach(parent=>this.emit(parent, eventName, ...params));
-		});
-		return this;
+	broadcast(target, eventName, ...params) {
+		return emit({target, eventName, params, emitter:this, direction:'down'});
 	}
 
-	async emitAsync(target, eventName, ...params) {
-		const eventNames = makeArray(eventName);
-		const parent = $private.get(this, PARENT, []);
-		let hasListeners = false;
-		for (let eventsNo=0; eventsNo<eventNames.length; eventsNo++) {
-			const listeners = this.listeners(target, eventNames[eventsNo]);
-			hasListeners = hasListeners || !!listeners.length;
-			for (let n=0; n<listeners.length; n++) await Promise.resolve(listeners[n](...params));
-			for (let n=0; n<parent.length; n++) await this.emitAsync(parent[n], eventNames[eventsNo], ...params);
-		}
+	broadcastAsync(target, eventName, ...params) {
+		return emitAsync({target, eventName, params, emitter:this, direction:'down'});
+	}
 
-		return hasListeners;
+	emit(target, eventName, ...params) {
+		return emit({target, eventName, params, emitter:this});
+	}
+
+	emitAsync(target, eventName, ...params) {
+		return emitAsync({target, eventName, params, emitter:this});
 	}
 
 	listeners(target, eventName) {
