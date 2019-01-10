@@ -96,33 +96,34 @@ export class GlobalEventEmitter {
 	constructor(options={}) {
 		const {namespace=defaultNamespace} = options;
 		$private.set(this, 'namespace', namespace);
+		$private.set(this, 'maxListeners', 10);
 	}
 
 	addParent(target, ...parent) {
 		parent.forEach(parent=>{
-			this.listeners(target, PARENT).push(parent);
-			this.listeners(parent, CHILDREN).push(target);
+			getListeners($private.get(this, 'namespace'), target, PARENT).push(parent);
+			getListeners($private.get(this, 'namespace'), parent, CHILDREN).push(target);
 		});
 	}
 
 	addChild(target, ...child) {
 		child.forEach(child=>{
-			this.listeners(target, CHILDREN).push(child);
-			this.listeners(child, PARENT).push(target);
+			getListeners($private.get(this, 'namespace'), target, CHILDREN).push(child);
+			getListeners($private.get(this, 'namespace'), child, PARENT).push(target);
 		});
 	}
 
 	removeParent(target, ...parent) {
 		parent.forEach(parent=>{
-			pull(this.listeners(target, PARENT), parent);
-			pull(this.listeners(parent, CHILDREN), target);
+			pull(getListeners($private.get(this, 'namespace'), target, PARENT), parent);
+			pull(getListeners($private.get(this, 'namespace'), parent, CHILDREN), target);
 		});
 	}
 
 	removeChild(target, ...child) {
 		child.forEach(child=>{
-			pull(this.listeners(target, CHILDREN), child);
-			pull(this.listeners(child, PARENT), target);
+			pull(getListeners($private.get(this, 'namespace'), target, CHILDREN), child);
+			pull(getListeners($private.get(this, 'namespace'), child, PARENT), target);
 		});
 	}
 
@@ -148,9 +149,11 @@ export class GlobalEventEmitter {
 
 	listeners(target, eventName) {
 		if (!Array.isArray(eventName) && !(eventName instanceof Set)) {
-			return getListeners($private.get(this, 'namespace'), target, eventName);
+			return [...getListeners($private.get(this, 'namespace'), target, eventName)];
 		}
-		return makeArray(eventName).map(eventName=>this.listeners(target, eventName));
+		return makeArray(eventName).map(
+			eventName=>[...getListeners($private.get(this, 'namespace'), target, eventName)]
+		);
 	}
 
 	off(...params) {
@@ -158,7 +161,9 @@ export class GlobalEventEmitter {
 	}
 
 	on(target, eventName, ...listener) {
-		makeArray(eventName).forEach(eventName=>this.listeners(target, eventName).push(...listener));
+		makeArray(eventName).forEach(
+			eventName=>getListeners($private.get(this, 'namespace'), target, eventName).push(...listener)
+		);
 		return this;
 	}
 
@@ -173,12 +178,16 @@ export class GlobalEventEmitter {
 	}
 
 	removeListener(target, eventName, ...listener) {
-		makeArray(eventName).forEach(eventName=>pull(this.listeners(target, eventName), ...listener));
+		makeArray(eventName).forEach(
+			eventName=>pull(getListeners($private.get(this, 'namespace'), target, eventName), ...listener)
+		);
 		return this;
 	}
 
 	prependListener(target, eventName, ...listener) {
-		makeArray(eventName).forEach(eventName=>this.listeners(target, eventName).unshift(...listener));
+		makeArray(eventName).forEach(
+			eventName=>getListeners($private.get(this, 'namespace'), target, eventName).unshift(...listener)
+		);
 		return this;
 	}
 
@@ -192,14 +201,22 @@ export class GlobalEventEmitter {
 		return this;
 	}
 
-	/*get maxListeners() {
+	getMaxListeners() {
+		return $private.get(this, 'maxListeners');
+	}
+
+	setMaxListeners(n) {
+		return $private.set(this, 'maxListeners', n);
+	}
+
+	get maxListeners() {
 		return this.getMaxListeners();
 	}
 
 	set maxListeners(n) {
 		this.setMaxListeners(n);
 		return true;
-	}*/
+	}
 }
 
 export class EventEmitter {
@@ -268,5 +285,22 @@ export class EventEmitter {
 
 	prependOnceListener(...params) {
 		return $private.get(this, 'emitter').prependOnceListener($private.get(this, 'target'), ...params);
+	}
+
+	getMaxListeners() {
+		return $private.get($private.get(this, 'emitter'), 'maxListeners');
+	}
+
+	setMaxListeners(n) {
+		return $private.set($private.get(this, 'emitter'), 'maxListeners', n);
+	}
+
+	get maxListeners() {
+		return this.getMaxListeners();
+	}
+
+	set maxListeners(n) {
+		this.setMaxListeners(n);
+		return true;
 	}
 }
