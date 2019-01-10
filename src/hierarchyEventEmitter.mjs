@@ -103,11 +103,11 @@ async function emitAsync({emitter, target, eventName, params, direction='up'}) {
  * Target based hierarchical event emitter with namespacing.  Events are fired against given targets bubbling up or
  * down the hierarchy. The class is a singleton for the given namespace.
  *
- * @class
+ * @class HierarchyEventEmitter
  * @singleton
- * @param {string|Symbol} options.namespace			The namespace to link the target emitter to.
+ * @param {string|Symbol} [options.namespace=defaultNamespace]		The namespace to link the target emitter to.
  */
-export class TargetEventEmitter {
+export class HierarchyEventEmitter {
 	constructor(options={}) {
 		const {namespace=defaultNamespace} = options;
 		if (emitters.has(namespace)) return emitters.get(namespace);
@@ -126,12 +126,12 @@ export class TargetEventEmitter {
 	 * @static
 	 * @public
 	 * @param {string|Symbol} options.namespace			The namespace to link the target emitter to.
-	 * @returns {TargetEventEmitter}					The namespaced TargetEventEmitter instance.
+	 * @returns {HierarchyEventEmitter}					The namespaced TargetEventEmitter instance.
 	 */
 	static factory(options={}) {
 		const {namespace=defaultNamespace} = options;
 		if (emitters.has(namespace)) return emitters.get(namespace);
-		return new TargetEventEmitter(options);
+		return new HierarchyEventEmitter(options);
 	}
 
 	/**
@@ -139,6 +139,7 @@ export class TargetEventEmitter {
 	 *
 	 * @param {Object|Array} target								The target to add children against.
 	 * @param {Object[]|Array[]} ...child						The child/children to add.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	addChild(target, ...child) {
 		child.forEach(child=>{
@@ -146,6 +147,7 @@ export class TargetEventEmitter {
 			getListenersByInstance(this, child, PARENT).push(target);
 			this.emit(target, addChildEvent, new AddChildEvent({target, parent:target, child}));
 		});
+		return this;
 	}
 
 	/**
@@ -153,6 +155,7 @@ export class TargetEventEmitter {
 	 *
 	 * @param {Object|Array} target								The target to add parent(s) against.
 	 * @param {Object[]|Array[]} ...parent						The parent(s) to add.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	addParent(target, ...parent) {
 		parent.forEach(parent=>{
@@ -160,6 +163,7 @@ export class TargetEventEmitter {
 			getListenersByInstance(this, parent, CHILDREN).push(target);
 			this.emit(target, addParentEvent, new AddParentEvent({target, parent, child:target}));
 		});
+		return this;
 	}
 
 	/**
@@ -172,7 +176,7 @@ export class TargetEventEmitter {
 	 * @param {Object|Array} target								The target to listen for events against.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName		The event or events to listen for.
 	 * @param {function[]} ...listener							The listener(s) to attach to the given event.
-	 * @returns {TargetEventEmitter}							The current TargetEventEmitter for chaining.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	addListener(target, eventName, ...listener) {
 		return this.on(target, eventName, ...listener);
@@ -265,8 +269,7 @@ export class TargetEventEmitter {
 	}
 
 	/**
-	 * Get a copy of the listener stack for given event(s). The stack is cloned but the listeners are references to
-	 * the actual listeners.
+	 * Get a count of the unique listeners for a given event(s) and target.
 	 *
 	 * @public
 	 * @param {Object|Array} target								The target to get listeners for.
@@ -304,7 +307,7 @@ export class TargetEventEmitter {
 	 * @param {Object|Array} target								The target to remove listeners from.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName		The event or events to remove listeners on.
 	 * @param {function[]} ...listener							The listener(s) to remove.
-	 * @returns {TargetEventEmitter}							The current TargetEventEmitter for chaining.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	off(target, eventName, ...listener) {
 		return this.removeListener(target, eventName, ...listener);
@@ -320,7 +323,7 @@ export class TargetEventEmitter {
 	 * @param {Object|Array} target								The target to listen for events against.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName		The event or events to listen for.
 	 * @param {function[]} ...listener							The listener(s) to attach to the given event.
-	 * @returns {TargetEventEmitter}							The current TargetEventEmitter for chaining.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	on(target, eventName, ...listener) {
 		makeArray(eventName).forEach(eventName=>{
@@ -341,7 +344,7 @@ export class TargetEventEmitter {
 	 * @param {Object|Array} target								The target to listen for events against.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName		The event or events to listen for.
 	 * @param {function[]} ...listener							The listener(s) to attach to the given event.
-	 * @returns {TargetEventEmitter}							The current TargetEventEmitter for chaining.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	once(target, eventName, ...listener) {
 		let once = (...params)=>{
@@ -359,7 +362,7 @@ export class TargetEventEmitter {
 	 * @param {Object|Array} target								The target to listen remove listeners on.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName		The event or events to remove listeners from. If not
 	 * 															given the all listeners are removed on the given target.
-	 * @returns {TargetEventEmitter}							The current TargetEventEmitter for chaining.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	removeAllListeners(target, eventName) {
 		const remove = listeners=>{
@@ -379,10 +382,11 @@ export class TargetEventEmitter {
 
 
 	/**
-	 * Remove child or children to the event hierarchy for the given target.
+	 * Remove child or children from the event hierarchy for the given target.
 	 *
 	 * @param {Object|Array} target								The target to remove child/children against.
 	 * @param {Object[]|Array[]} ...child						The child/children to remove.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	removeChild(target, ...child) {
 		child.forEach(child=>{
@@ -390,6 +394,7 @@ export class TargetEventEmitter {
 			pull(getListenersByInstance(this, child, PARENT), target);
 			this.emit(target, removeChildEvent, new RemoveChildEvent({target, child, parent:target}));
 		});
+		return this;
 	}
 
 	/**
@@ -399,7 +404,7 @@ export class TargetEventEmitter {
 	 * @param {Object|Array} target								The target to remove listeners from.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName		The event or events to remove listeners on.
 	 * @param {function[]} ...listener							The listener(s) to remove.
-	 * @returns {TargetEventEmitter}							The current TargetEventEmitter for chaining.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	removeListener(target, eventName, ...listener) {
 		makeArray(eventName).forEach(eventName=>{
@@ -416,6 +421,7 @@ export class TargetEventEmitter {
 	 *
 	 * @param {Object|Array} target								The target to remove parent(s) against.
 	 * @param {Object[]|Array[]} ...parent						The parent(s) to remove.
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	removeParent(target, ...parent) {
 		parent.forEach(parent=>{
@@ -423,19 +429,18 @@ export class TargetEventEmitter {
 			pull(getListenersByInstance(this, parent, CHILDREN), target);
 			this.emit(target, removeParentEvent, new RemoveParentEvent({target, parent, child:target}));
 		});
+		return this;
 	}
 
 	/**
 	 * Add a listener(s) to the given target for the given event(s). Adds at the start of the listener stack for given
 	 * target and events. If you wish to add to the end of the stack, use on().
 	 *
-	 * @note This is an alias for on() method.
-	 *
 	 * @public
 	 * @param {Object|Array} target								The target to listen for events against.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName		The event or events to listen for.
 	 * @param {function[]} ...listener							The listener(s) to attach to the given event.
-	 * @returns {TargetEventEmitter}							The current TargetEventEmitter for chaining
+	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining
 	 */
 	prependListener(target, eventName, ...listener) {
 		makeArray(eventName).forEach(eventName=>{
@@ -456,7 +461,7 @@ export class TargetEventEmitter {
 	 * @param {Object|Array} target							The target to listen for events against.
 	 * @param {string|Symbol|string[]|Symbol[]} eventName	The event or events to listen for.
 	 * @param {...function} listener						The listener(s) to attach to the given event.
-	 * @returns {TargetEventEmitter}						The current TargetEventEmitter for chaining.
+	 * @returns {HierarchyEventEmitter}						The current TargetEventEmitter for chaining.
 	 */
 	prependOnceListener(target, eventName, ...listener) {
 		let once = (...params)=>{
@@ -478,4 +483,4 @@ export class TargetEventEmitter {
 	}
 }
 
-export default TargetEventEmitter;
+export default HierarchyEventEmitter;

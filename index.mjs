@@ -2,7 +2,7 @@ import Event from "./src/event";
 export default Event;
 
 export * from "./src/event";
-export * from "./src/targetEventEmitter";
+export * from "./src/hierarchyEventEmitter";
 export * from "./src/eventEmitter";
 export {
 	addChildEvent,
