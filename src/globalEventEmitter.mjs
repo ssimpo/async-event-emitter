@@ -62,7 +62,7 @@ async function emitAsync({emitter, target, eventName, params, direction='up'}) {
 	return hasListeners;
 }
 
-export default class GlobalEventEmitter {
+export class GlobalEventEmitter {
 	constructor(options={}) {
 		const {namespace=defaultNamespace} = options;
 		$private.set(this, 'namespace', namespace);
@@ -180,3 +180,5 @@ export default class GlobalEventEmitter {
 		return true;
 	}
 };
+
+export default GlobalEventEmitter;

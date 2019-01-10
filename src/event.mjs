@@ -1,6 +1,6 @@
 import {$private} from "./util";
 
-export default class Event {
+export class Event {
 	constructor(options={}) {
 		const {bubbling=true, target} = options;
 		$private.set(this, 'bubbling', bubbling);
@@ -28,3 +28,5 @@ export default class Event {
 		return $private.get(this, 'target');
 	}
 };
+
+export default Event;

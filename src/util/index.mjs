@@ -4,5 +4,4 @@ export function makeArray(ary) {
 	return ((Array.isArray(ary))?ary:[ary]);
 }
 
-import $private from "./$private";
-export {$private};
+export * from "./$private";

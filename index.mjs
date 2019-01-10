@@ -1,6 +1,6 @@
 import Event from "./src/event";
 export default Event;
 
-import GlobalEventEmitter from "./src/globalEventEmitter";
-import EventEmitter from "./src/eventEmitter";
-export {Event, EventEmitter, GlobalEventEmitter};
+export * from "./src/event";
+export * from "./src/globalEventEmitter";
+export * from "./src/eventEmitter";

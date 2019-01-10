@@ -2,7 +2,7 @@ import {$private, makeArray} from "./util";
 import GlobalEventEmitter from "./globalEventEmitter";
 import {defaultNamespace} from "./consts";
 
-export default class EventEmitter {
+export class EventEmitter {
 	constructor(options={}) {
 		const {namespace=defaultNamespace, target=this, parent} = options;
 		const emitter = new GlobalEventEmitter({namespace});
@@ -87,3 +87,5 @@ export default class EventEmitter {
 		return true;
 	}
 }
+
+export default EventEmitter;
