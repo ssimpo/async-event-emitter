@@ -217,6 +217,28 @@ export class HierarchyEventEmitter {
 	}
 
 	/**
+	 * Get the children of the given target in the event hierarchy
+	 *
+	 * @public
+	 * @param {Object|Array} target								The target to listen for events against.
+	 * @returns {Array[]|Object[]}								Children in event hierarchy
+	 */
+	getChildren(target) {
+		return [...getListenersByInstance(this, target, CHILDREN)];
+	}
+
+	/**
+	 * Get the parents of the given target in the event hierarchy
+	 *
+	 * @public
+	 * @param {Object|Array} target								The target to listen for events against.
+	 * @returns {Array[]|Object[]}								Parents in event hierarchy
+	 */
+	getParents(target) {
+		return [...getListenersByInstance(this, target, PARENT)];
+	}
+
+	/**
 	 * Emit an event with the given parameters on for the provided target and event(s). Will bubble events up if
 	 * bubbling is true (or not provided) on event object.
 	 *

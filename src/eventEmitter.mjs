@@ -10,20 +10,22 @@ import {defaultNamespace} from "./consts";
  *
  * @class EventEmitter
  * @param {string|Symbol} [options.namespace=defaultNamespace]		The namespace to get the target emitter to.
- * @param {Object|Array} [options.parent]							Any parent(s) to connect up to this target.
+ * @param {Object|Array|Object[]|Array[]} [options.parent]			Any parent(s) to connect up to this target.
+ * @param {Object|Array|Object[]|Array[]} [options.children]		Any children to connect up to this target.
  * @param {Object|Array} [options.target=this]						The target for this emitter. Defaults to this
  * 																	(assuming we are extending something else).
  */
 export class EventEmitter {
 	constructor(options={}) {
-		const {namespace=defaultNamespace, target=this, parent} = options;
+		const {namespace=defaultNamespace, target=this, parent, children} = options;
 		const emitter = HierarchyEventEmitter.factory({namespace});
-		const parents = makeArray(parent);
+		const _parents = makeArray(parent);
+		const _children = makeArray(children);
 		$private.set(this, 'namespace', namespace);
 		$private.set(this, 'emitter', emitter);
 		$private.set(this, 'target', target);
-		$private.set(this, 'parent', parents);
-		emitter.addParent(target, ...parents);
+		emitter.addParent(target, ..._parents);
+		emitter.addChild(target, ..._children);
 	}
 
 	/**
@@ -93,6 +95,15 @@ export class EventEmitter {
 	 */
 	broadcastAsync(...params) {
 		return $private.get(this, 'emitter').broadcastAsync($private.get(this, 'target'), ...params);
+	}
+
+	/**
+	 * The children assigned to this emitter in the event hierarchy.
+	 *
+	 * @property {Array[]|Object[]} children
+	 */
+	get children() {
+		return $private.get(this, 'emitter').getChildren($private.get(this, 'target'));
 	}
 
 	/**
@@ -210,6 +221,15 @@ export class EventEmitter {
 	once(...params) {
 		$private.get(this, 'emitter').once($private.get(this, 'target'), ...params);
 		return this;
+	}
+
+	/**
+	 * The parents assigned to this emitter in the event hierarchy.
+	 *
+	 * @property {Array[]|Object[]} children
+	 */
+	get parents() {
+		return $private.get(this, 'emitter').getParents($private.get(this, 'target'));
 	}
 
 	/**
