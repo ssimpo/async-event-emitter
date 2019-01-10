@@ -2,7 +2,26 @@ import {makeArray, $private} from "./util";
 import pull from "lodash/pull";
 import isObject from "lodash/isObject";
 import flatten from "lodash/flatten";
-import {defaultNamespace, PARENT, CHILDREN} from "./consts";
+import {
+	defaultNamespace,
+	PARENT,
+	CHILDREN,
+	newListenerEvent,
+	removeListenerEvent,
+	addChildEvent,
+	removeChildEvent,
+	addParentEvent,
+	removeParentEvent
+} from "./consts";
+import {
+	NewListenerEvent,
+	RemoveListenerEvent,
+	AddChildEvent,
+	AddParentEvent,
+	RemoveChildEvent,
+	RemoveParentEvent
+} from "./event";
+
 
 function getAllListeners(namespace, target) {
 	if (!$private.has(namespace, target)) $private.set(namespace, target, new WeakMap());
@@ -41,9 +60,9 @@ function emit({emitter, target, eventName, params, direction='up'}) {
 		emitter.listeners(target, eventName).forEach(listener=>{
 			if (!stopped()) listener(...params);
 		});
-		if (!!NEXT && !stopped() && bubbling) {
-			emitter.listeners(target, NEXT).forEach(parent=>emitter.emit(parent, eventName, ...params));
-		}
+		if (!!NEXT && !stopped() && bubbling) emitter.listeners(target, NEXT).forEach(
+			parent=>emitter.emit(parent, eventName, ...params)
+		);
 	});
 	return this;
 }
@@ -81,6 +100,7 @@ export class GlobalEventEmitter {
 		child.forEach(child=>{
 			getListenersByInstance(this, target, CHILDREN).push(child);
 			getListenersByInstance(this, child, PARENT).push(target);
+			this.emit(target, addChildEvent, new AddChildEvent({target, parent:target, child}));
 		});
 	}
 
@@ -88,6 +108,7 @@ export class GlobalEventEmitter {
 		parent.forEach(parent=>{
 			getListenersByInstance(this, target, PARENT).push(parent);
 			getListenersByInstance(this, parent, CHILDREN).push(target);
+			this.emit(target, addParentEvent, new AddParentEvent({target, parent, child:target}));
 		});
 	}
 
@@ -141,7 +162,12 @@ export class GlobalEventEmitter {
 	}
 
 	on(target, eventName, ...listener) {
-		makeArray(eventName).forEach(eventName=>getListenersByInstance(this, target, eventName).push(...listener));
+		makeArray(eventName).forEach(eventName=>{
+			getListenersByInstance(this, target, eventName).push(...listener);
+			listener.forEach(listener=>this.emit(
+				target, newListenerEvent, new NewListenerEvent({target, listener})
+			));
+		});
 		return this;
 	}
 
@@ -156,14 +182,17 @@ export class GlobalEventEmitter {
 	}
 
 	removeAllListeners(target, eventName) {
+		const remove = listeners=>{
+			listeners.length = 0;
+			listeners.forEach(listener=>this.emit(
+				target, removeListenerEvent, new RemoveListenerEvent({target, listener})
+			));
+		};
+
 		if (!!eventName) {
-			getAllListenersByInstance(this, target).forEach(listeners=>{
-				listeners.length = 0;
-			});
+			getAllListenersByInstance(this, target).forEach(remove);
 		} else {
-			makeArray(eventName).map(eventName=>{
-				getListenersByInstance(this, target, eventName).length = 0;
-			});
+			makeArray(eventName).map(eventName=>remove(getListenersByInstance(this, target, eventName)));
 		}
 		return this;
 	}
@@ -172,11 +201,17 @@ export class GlobalEventEmitter {
 		child.forEach(child=>{
 			pull(getListenersByInstance(this, target, CHILDREN), child);
 			pull(getListenersByInstance(this, child, PARENT), target);
+			this.emit(target, removeChildEvent, new RemoveChildEvent({target, child, parent:target}));
 		});
 	}
 
 	removeListener(target, eventName, ...listener) {
-		makeArray(eventName).forEach(eventName=>pull(getListenersByInstance(this, target, eventName), ...listener));
+		makeArray(eventName).forEach(eventName=>{
+			pull(getListenersByInstance(this, target, eventName), ...listener);
+			listener.forEach(listener=>this.emit(
+				target, removeListenerEvent, new RemoveListenerEvent({target, listener})
+			));
+		});
 		return this;
 	}
 
@@ -184,11 +219,17 @@ export class GlobalEventEmitter {
 		parent.forEach(parent=>{
 			pull(getListenersByInstance(this, target, PARENT), parent);
 			pull(getListenersByInstance(this, parent, CHILDREN), target);
+			this.emit(target, removeParentEvent, new RemoveParentEvent({target, parent, child:target}));
 		});
 	}
 
 	prependListener(target, eventName, ...listener) {
-		makeArray(eventName).forEach(eventName=>getListenersByInstance(this, target, eventName).unshift(...listener));
+		makeArray(eventName).forEach(eventName=>{
+			getListenersByInstance(this, target, eventName).unshift(...listener);
+			listener.forEach(listener=>this.emit(
+				target, newListenerEvent, new NewListenerEvent({target, listener})
+			));
+		});
 		return this;
 	}
 
