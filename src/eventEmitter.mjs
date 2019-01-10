@@ -1,11 +1,11 @@
 import {$private, makeArray} from "./util";
-import GlobalEventEmitter from "./globalEventEmitter";
+import TargetEventEmitter from "./targetEventEmitter";
 import {defaultNamespace} from "./consts";
 
 export class EventEmitter {
 	constructor(options={}) {
 		const {namespace=defaultNamespace, target=this, parent} = options;
-		const emitter = new GlobalEventEmitter({namespace});
+		const emitter = TargetEventEmitter.factory({namespace});
 		const parents = makeArray(parent);
 		$private.set(this, 'namespace', namespace);
 		$private.set(this, 'emitter', emitter);

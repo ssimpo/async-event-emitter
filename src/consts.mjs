@@ -1,4 +1,4 @@
-export const defaultNamespace = {};
+export const defaultNamespace = Symbol('Default namespace');
 export const PARENT = Symbol('Target Parents');
 export const CHILDREN = Symbol('Target Children');
 export const newListenerEvent = Symbol('New listener event id');
