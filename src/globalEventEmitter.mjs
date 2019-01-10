@@ -1,14 +1,22 @@
 import {makeArray, $private} from "./util";
 import pull from "lodash/pull";
 import isObject from "lodash/isObject";
+import flatten from "lodash/flatten";
 import {defaultNamespace, PARENT, CHILDREN} from "./consts";
 
-
-function getListeners(namespace, target, eventName) {
+function getAllListeners(namespace, target) {
 	if (!$private.has(namespace, target)) $private.set(namespace, target, new WeakMap());
 	const store = $private.get(namespace, target);
 	if (!store.has(target)) store.set(target, new Map());
-	const allListeners = store.get(target);
+	return store.get(target);
+}
+function getAllListenersByInstance(instance, target) {
+	return getAllListeners($private.get(instance, 'namespace'), target);
+}
+
+
+function getListeners(namespace, target, eventName) {
+	const allListeners = getAllListeners(namespace, target);
 	if (!allListeners.has(eventName)) allListeners.set(eventName, []);
 	return allListeners.get(eventName);
 }
@@ -69,13 +77,6 @@ export class GlobalEventEmitter {
 		$private.set(this, 'maxListeners', 10);
 	}
 
-	addParent(target, ...parent) {
-		parent.forEach(parent=>{
-			getListenersByInstance(this, target, PARENT).push(parent);
-			getListenersByInstance(this, parent, CHILDREN).push(target);
-		});
-	}
-
 	addChild(target, ...child) {
 		child.forEach(child=>{
 			getListenersByInstance(this, target, CHILDREN).push(child);
@@ -83,17 +84,10 @@ export class GlobalEventEmitter {
 		});
 	}
 
-	removeParent(target, ...parent) {
+	addParent(target, ...parent) {
 		parent.forEach(parent=>{
-			pull(getListenersByInstance(this, target, PARENT), parent);
-			pull(getListenersByInstance(this, parent, CHILDREN), target);
-		});
-	}
-
-	removeChild(target, ...child) {
-		child.forEach(child=>{
-			pull(getListenersByInstance(this, target, CHILDREN), child);
-			pull(getListenersByInstance(this, child, PARENT), target);
+			getListenersByInstance(this, target, PARENT).push(parent);
+			getListenersByInstance(this, parent, CHILDREN).push(target);
 		});
 	}
 
@@ -115,6 +109,24 @@ export class GlobalEventEmitter {
 
 	emitAsync(target, eventName, ...params) {
 		return emitAsync({target, eventName, params, emitter:this});
+	}
+
+	eventNames(target) {
+		return [...getAllListenersByInstance(this, target).keys()];
+	}
+
+	getMaxListeners() {
+		return $private.get(this, 'maxListeners');
+	}
+
+	get maxListeners() {
+		return this.getMaxListeners();
+	}
+
+	listenerCount(target, eventName) {
+		if (!!eventName) return flatten(this.listeners(target, eventName)).length;
+		return [...getAllListenersByInstance(this, target).values()]
+			.reduce((count, listeners)=>(count+listeners.length), 0);
 	}
 
 	listeners(target, eventName) {
@@ -143,9 +155,36 @@ export class GlobalEventEmitter {
 		return this;
 	}
 
+	removeAllListeners(target, eventName) {
+		if (!!eventName) {
+			getAllListenersByInstance(this, target).forEach(listeners=>{
+				listeners.length = 0;
+			});
+		} else {
+			makeArray(eventName).map(eventName=>{
+				getListenersByInstance(this, target, eventName).length = 0;
+			});
+		}
+		return this;
+	}
+
+	removeChild(target, ...child) {
+		child.forEach(child=>{
+			pull(getListenersByInstance(this, target, CHILDREN), child);
+			pull(getListenersByInstance(this, child, PARENT), target);
+		});
+	}
+
 	removeListener(target, eventName, ...listener) {
 		makeArray(eventName).forEach(eventName=>pull(getListenersByInstance(this, target, eventName), ...listener));
 		return this;
+	}
+
+	removeParent(target, ...parent) {
+		parent.forEach(parent=>{
+			pull(getListenersByInstance(this, target, PARENT), parent);
+			pull(getListenersByInstance(this, parent, CHILDREN), target);
+		});
 	}
 
 	prependListener(target, eventName, ...listener) {
@@ -163,22 +202,14 @@ export class GlobalEventEmitter {
 		return this;
 	}
 
-	getMaxListeners() {
-		return $private.get(this, 'maxListeners');
-	}
-
 	setMaxListeners(n) {
 		return $private.set(this, 'maxListeners', n);
-	}
-
-	get maxListeners() {
-		return this.getMaxListeners();
 	}
 
 	set maxListeners(n) {
 		this.setMaxListeners(n);
 		return true;
 	}
-};
+}
 
 export default GlobalEventEmitter;

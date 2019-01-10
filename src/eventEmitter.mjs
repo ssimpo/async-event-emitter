@@ -14,24 +14,24 @@ export class EventEmitter {
 		emitter.addParent(target, ...parents);
 	}
 
-	addParent(...params) {
-		return $private.get(this, 'emitter').addParent($private.get(this, 'target'), ...params);
-	}
-
 	addChild(...params) {
 		return $private.get(this, 'emitter').addChild($private.get(this, 'target'), ...params);
 	}
 
-	removeParent(...params) {
-		return $private.get(this, 'emitter').removeParent($private.get(this, 'target'), ...params);
-	}
-
-	removeChild(...params) {
-		return $private.get(this, 'emitter').removeChild($private.get(this, 'target'), ...params);
+	addParent(...params) {
+		return $private.get(this, 'emitter').addParent($private.get(this, 'target'), ...params);
 	}
 
 	addListener(...params) {
 		return this.on(...params);
+	}
+
+	broadcast(...params) {
+		return $private.get(this, 'emitter').broadcast($private.get(this, 'target'), ...params);
+	}
+
+	broadcastAsync(...params) {
+		return $private.get(this, 'emitter').broadcastAsync($private.get(this, 'target'), ...params);
 	}
 
 	emit(...params) {
@@ -40,6 +40,22 @@ export class EventEmitter {
 
 	emitAsync(...params) {
 		return $private.get(this, 'emitter').emitAsync($private.get(this, 'target'), ...params);
+	}
+
+	eventNames(...params) {
+		return $private.get(this, 'emitter').eventNames($private.get(this, 'target'), ...params);
+	}
+
+	getMaxListeners() {
+		return $private.get($private.get(this, 'emitter'), 'maxListeners');
+	}
+
+	get maxListeners() {
+		return this.getMaxListeners();
+	}
+
+	listenerCount(...params) {
+		return $private.get(this, 'emitter').listenerCount($private.get(this, 'target'), ...params);
 	}
 
 	listeners(...params) {
@@ -58,8 +74,20 @@ export class EventEmitter {
 		return $private.get(this, 'emitter').once($private.get(this, 'target'), ...params);
 	}
 
+	removeAllListeners(...params) {
+		return $private.get(this, 'emitter').removeAllListeners($private.get(this, 'target'), ...params);
+	}
+
+	removeChild(...params) {
+		return $private.get(this, 'emitter').removeChild($private.get(this, 'target'), ...params);
+	}
+
 	removeListener(...params) {
 		return $private.get(this, 'emitter').removeListener($private.get(this, 'target'), ...params);
+	}
+
+	removeParent(...params) {
+		return $private.get(this, 'emitter').removeParent($private.get(this, 'target'), ...params);
 	}
 
 	prependListener(...params) {
@@ -70,16 +98,8 @@ export class EventEmitter {
 		return $private.get(this, 'emitter').prependOnceListener($private.get(this, 'target'), ...params);
 	}
 
-	getMaxListeners() {
-		return $private.get($private.get(this, 'emitter'), 'maxListeners');
-	}
-
 	setMaxListeners(n) {
 		return $private.set($private.get(this, 'emitter'), 'maxListeners', n);
-	}
-
-	get maxListeners() {
-		return this.getMaxListeners();
 	}
 
 	set maxListeners(n) {
