@@ -106,6 +106,14 @@ export class EventEmitter {
 		return $private.get(this, 'emitter').getChildren($private.get(this, 'target'));
 	}
 
+	get defaultMaxListeners() {
+		return $private.get(this, 'emitter').maxListeners || 10;
+	}
+
+	set defaultMaxListeners(n) {
+		return $private.get(this, 'emitter').maxListeners = n;
+	}
+
 	/**
 	 * Emit an event with the given parameters on for the provided event(s). Will bubble events up if bubbling is true
 	 * (or not provided) on event object.
@@ -148,11 +156,7 @@ export class EventEmitter {
 	}
 
 	getMaxListeners() {
-		return $private.get($private.get(this, 'emitter'), 'maxListeners');
-	}
-
-	get maxListeners() {
-		return this.getMaxListeners();
+		return $private.get(this, 'target').getMaxListeners($private.get(this, 'target'));
 	}
 
 	/**
@@ -176,6 +180,15 @@ export class EventEmitter {
 	 */
 	listeners(...params) {
 		return $private.get(this, 'emitter').listeners($private.get(this, 'target'), ...params);
+	}
+
+	get maxListeners() {
+		return this.getMaxListeners();
+	}
+
+	set maxListeners(n) {
+		this.setMaxListeners(n);
+		return true;
 	}
 
 	/**
@@ -310,12 +323,7 @@ export class EventEmitter {
 	}
 
 	setMaxListeners(n) {
-		return $private.set($private.get(this, 'emitter'), 'maxListeners', n);
-	}
-
-	set maxListeners(n) {
-		this.setMaxListeners(n);
-		return true;
+		return $private.get(this, 'target').setMaxListeners(n, $private.get(this, 'target'));
 	}
 }
 

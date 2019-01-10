@@ -25,6 +25,7 @@ import {
 
 const emitters = new Map();
 const namespaces = new Map();
+const maxListenerWarnings = new Set();
 
 
 function getAllListeners(namespace, target) {
@@ -62,17 +63,21 @@ function emit({emitter, target, eventName, params, direction='up'}) {
 
 	let hasListeners = false;
 	makeArray(eventName).forEach(eventName=>{
+		let _hasListeners = false;
 		emitter.listeners(target, eventName).forEach(listener=>{
 			if (!stopped()) {
-				hasListeners = true;
+				_hasListeners = true;
 				listener(...params);
 			}
 		});
 		if (!!NEXT && !stopped() && bubbling) emitter.listeners(target, NEXT).forEach(parent=>{
-			hasListeners = hasListeners || emitter.emit(parent, eventName, ...params)
+			_hasListeners = _hasListeners || emitter.emit(parent, eventName, ...params);
+
 		});
+		hasListeners = hasListeners || _hasListeners;
+		if (!_hasListeners && (eventName === 'error')) throw new Error('Error event emitted but nothing to capture it');
 	});
-	return this;
+	return hasListeners;
 }
 
 async function emitAsync({emitter, target, eventName, params, direction='up'}) {
@@ -86,14 +91,17 @@ async function emitAsync({emitter, target, eventName, params, direction='up'}) {
 	for (let eventsNo=0; eventsNo<eventNames.length; eventsNo++) {
 		const listeners = emitter.listeners(target, eventNames[eventsNo]);
 		hasListeners = hasListeners || !!listeners.length;
+		let _hasListeners = !!listeners.length;
 		for (let n=0; n<listeners.length; n++) {
 			if (!stopped()) await Promise.resolve(listeners[n](...params));
 		}
 		if (!stopped() && bubbling) {
 			for (let n=0; n<parent.length; n++) {
-				hasListeners = hasListeners || await emitter.emitAsync(parent[n], eventNames[eventsNo], ...params);
+				_hasListeners = _hasListeners || await emitter.emitAsync(parent[n], eventNames[eventsNo], ...params);
 			}
 		}
+		hasListeners = hasListeners || _hasListeners;
+		if (!_hasListeners && (eventNames[eventsNo] === 'error')) throw new Error('Error event emitted but nothing to capture it');
 	}
 
 	return hasListeners;
@@ -216,26 +224,12 @@ export class HierarchyEventEmitter {
 		return emitAsync({target, eventName, params, emitter:this, direction:'down'});
 	}
 
-	/**
-	 * Get the children of the given target in the event hierarchy
-	 *
-	 * @public
-	 * @param {Object|Array} target								The target to listen for events against.
-	 * @returns {Array[]|Object[]}								Children in event hierarchy
-	 */
-	getChildren(target) {
-		return [...getListenersByInstance(this, target, CHILDREN)];
+	get defaultMaxListeners() {
+		return this.maxListeners || 10;
 	}
 
-	/**
-	 * Get the parents of the given target in the event hierarchy
-	 *
-	 * @public
-	 * @param {Object|Array} target								The target to listen for events against.
-	 * @returns {Array[]|Object[]}								Parents in event hierarchy
-	 */
-	getParents(target) {
-		return [...getListenersByInstance(this, target, PARENT)];
+	set defaultMaxListeners(n) {
+		return this.maxListeners = n;
 	}
 
 	/**
@@ -282,12 +276,31 @@ export class HierarchyEventEmitter {
 		return [...getAllListenersByInstance(this, target).keys()];
 	}
 
-	getMaxListeners() {
-		return $private.get(this, 'maxListeners');
+	getMaxListeners(target) {
+		if (!target) return $private.get(this, 'maxListeners', 10);
+		return $private.get(target, 'maxListeners', $private.get(this, 'maxListeners', 10));
 	}
 
-	get maxListeners() {
-		return this.getMaxListeners();
+	/**
+	 * Get the children of the given target in the event hierarchy
+	 *
+	 * @public
+	 * @param {Object|Array} target								The target to listen for events against.
+	 * @returns {Array[]|Object[]}								Children in event hierarchy
+	 */
+	getChildren(target) {
+		return [...getListenersByInstance(this, target, CHILDREN)];
+	}
+
+	/**
+	 * Get the parents of the given target in the event hierarchy
+	 *
+	 * @public
+	 * @param {Object|Array} target								The target to listen for events against.
+	 * @returns {Array[]|Object[]}								Parents in event hierarchy
+	 */
+	getParents(target) {
+		return [...getListenersByInstance(this, target, PARENT)];
 	}
 
 	/**
@@ -318,6 +331,10 @@ export class HierarchyEventEmitter {
 			...getListenersByInstance(this, target, eventName)
 		]);
 		return uniq(makeArray(eventName).map(eventName=>[...getListenersByInstance(this, target, eventName)]));
+	}
+
+	get maxListeners() {
+		return this.getMaxListeners();
 	}
 
 	/**
@@ -353,6 +370,13 @@ export class HierarchyEventEmitter {
 			listener.forEach(listener=>this.emit(
 				target, newListenerEvent, new NewListenerEvent({target, listener})
 			));
+			if (!maxListenerWarnings.has(eventName)) {
+				const count = this.listenerCount(target, eventName);
+				if (count > this.getMaxListeners(target)) {
+					maxListenerWarnings.add(eventName);
+					console.warn(`Possible memory leak, ${count} listeners assigned to event:`, eventName);
+				}
+			}
 		});
 		return this;
 	}
@@ -470,6 +494,13 @@ export class HierarchyEventEmitter {
 			listener.forEach(listener=>this.emit(
 				target, newListenerEvent, new NewListenerEvent({target, listener})
 			));
+			if (!maxListenerWarnings.has(eventName)) {
+				const count = this.listenerCount(target, eventName);
+				if (count > this.getMaxListeners(target)) {
+					maxListenerWarnings.add(eventName);
+					console.warn(`Possible memory leak, ${count} listeners assigned to event:`, eventName);
+				}
+			}
 		});
 		return this;
 	}
@@ -495,8 +526,9 @@ export class HierarchyEventEmitter {
 		return this;
 	}
 
-	setMaxListeners(n) {
-		return $private.set(this, 'maxListeners', n);
+	setMaxListeners(n, target) {
+		if (!target) return $private.set(this, 'maxListeners', n);
+		return $private.set(target, 'maxListeners', n);
 	}
 
 	set maxListeners(n) {
