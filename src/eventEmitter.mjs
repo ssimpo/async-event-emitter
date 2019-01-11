@@ -19,13 +19,15 @@ export class EventEmitter {
 	constructor(options={}) {
 		const {namespace=defaultNamespace, target=this, parent, children} = options;
 		const emitter = HierarchyEventEmitter.factory({namespace});
-		const _parents = makeArray(parent);
-		const _children = makeArray(children);
+		const {maxListeners=emitter.maxListeners} = options;
+
 		$private.set(this, 'namespace', namespace);
 		$private.set(this, 'emitter', emitter);
 		$private.set(this, 'target', target);
-		emitter.addParent(target, ..._parents);
-		emitter.addChild(target, ..._children);
+
+		this.addParent(...makeArray(parent));
+		this.addChild(...makeArray(children));
+		this.maxListeners = maxListeners;
 	}
 
 	/**
@@ -107,11 +109,11 @@ export class EventEmitter {
 	}
 
 	get defaultMaxListeners() {
-		return $private.get(this, 'emitter').maxListeners || 10;
+		return $private.get(this, 'emitter').defaultMaxListeners;
 	}
 
 	set defaultMaxListeners(n) {
-		return $private.get(this, 'emitter').maxListeners = n;
+		return $private.get(this, 'emitter').defaultMaxListeners = n;
 	}
 
 	/**
@@ -156,7 +158,7 @@ export class EventEmitter {
 	}
 
 	getMaxListeners() {
-		return $private.get(this, 'target').getMaxListeners($private.get(this, 'target'));
+		return $private.get(this, 'emitter').getMaxListeners($private.get(this, 'target'));
 	}
 
 	/**
@@ -323,7 +325,7 @@ export class EventEmitter {
 	}
 
 	setMaxListeners(n) {
-		return $private.get(this, 'target').setMaxListeners(n, $private.get(this, 'target'));
+		return $private.get(this, 'emitter').setMaxListeners(n, $private.get(this, 'target'));
 	}
 }
 

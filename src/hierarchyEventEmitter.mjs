@@ -117,11 +117,11 @@ async function emitAsync({emitter, target, eventName, params, direction='up'}) {
  */
 export class HierarchyEventEmitter {
 	constructor(options={}) {
-		const {namespace=defaultNamespace} = options;
+		const {namespace=defaultNamespace, maxListeners=this.constructor.defaultMaxListeners} = options;
 		if (emitters.has(namespace)) return emitters.get(namespace);
 		if (!namespaces.has(namespace)) namespaces.set(namespace, {});
 		$private.set(this, 'namespace', namespaces.get(namespace));
-		$private.set(this, 'maxListeners', 10);
+		this.maxListeners = maxListeners;
 		emitters.set(namespace, this);
 	}
 
@@ -224,12 +224,20 @@ export class HierarchyEventEmitter {
 		return emitAsync({target, eventName, params, emitter:this, direction:'down'});
 	}
 
+	static get defaultMaxListeners() {
+		return $private.get(this, 'defaultMaxListeners', 10);
+	}
+
 	get defaultMaxListeners() {
-		return this.maxListeners || 10;
+		return $private.get($private.get(this, 'namespace'), 'defaultMaxListeners', this.constructor.defaultMaxListeners);
+	}
+
+	static set defaultMaxListeners(n) {
+		return $private.set(this, 'defaultMaxListeners', n);
 	}
 
 	set defaultMaxListeners(n) {
-		return this.maxListeners = n;
+		return $private.set($private.get(this, 'namespace'), 'defaultMaxListeners', n);
 	}
 
 	/**
@@ -277,8 +285,8 @@ export class HierarchyEventEmitter {
 	}
 
 	getMaxListeners(target) {
-		if (!target) return $private.get(this, 'maxListeners', 10);
-		return $private.get(target, 'maxListeners', $private.get(this, 'maxListeners', 10));
+		if (!target) return $private.get($private.get(this, 'namespace'), 'maxListeners', this.defaultMaxListeners);
+		return $private.get(target, 'maxListeners', this.maxListeners);
 	}
 
 	/**
@@ -527,7 +535,7 @@ export class HierarchyEventEmitter {
 	}
 
 	setMaxListeners(n, target) {
-		if (!target) return $private.set(this, 'maxListeners', n);
+		if (!target) return $private.set($private.get(this, 'namespace'), 'maxListeners', n);
 		return $private.set(target, 'maxListeners', n);
 	}
 
