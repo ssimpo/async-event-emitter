@@ -2,6 +2,7 @@ import {$private, makeArray} from "./util";
 import HierarchyEventEmitter from "./hierarchyEventEmitter";
 import {defaultNamespace} from "./consts";
 
+
 /**
  * Target based hierarchical event emitter with namespacing.  Events are fired against given targets bubbling up or
  * down the hierarchy. The class is meant to be extended onto other classes (although can be used directly if target
@@ -17,7 +18,15 @@ import {defaultNamespace} from "./consts";
  */
 export class EventEmitter {
 	constructor(options={}) {
-		const {namespace=defaultNamespace, target=this, parent, children} = options;
+		const {
+			namespace=defaultNamespace,
+			target=this,
+			parent,
+			children,
+			throwOnNoErrorListener=true,
+			emitNodeEmitterEvents=false
+		} = options;
+
 		const emitter = HierarchyEventEmitter.factory({namespace});
 		const {maxListeners=emitter.maxListeners} = options;
 
@@ -28,6 +37,24 @@ export class EventEmitter {
 		this.addParent(...makeArray(parent));
 		this.addChild(...makeArray(children));
 		this.maxListeners = maxListeners;
+		this.throwOnNoErrorListener = throwOnNoErrorListener;
+		this.emitNodeEmitterEvents = emitNodeEmitterEvents;
+	}
+
+	get emitNodeEmitterEvents() {
+		$private.get($private.get(this, 'target'), 'emitNodeEmitterEvents', false);
+	}
+
+	set emitNodeEmitterEvents(value) {
+		$private.set($private.get(this, 'target'), 'emitNodeEmitterEvents', value);
+	}
+
+	get throwOnNoErrorListener() {
+		$private.get($private.get(this, 'target'), 'throwOnNoErrorListener', true);
+	}
+
+	set throwOnNoErrorListener(value) {
+		$private.set($private.get(this, 'target'), 'throwOnNoErrorListener', value);
 	}
 
 	/**

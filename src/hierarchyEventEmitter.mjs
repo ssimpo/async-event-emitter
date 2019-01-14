@@ -60,6 +60,7 @@ function emit({emitter, target, eventName, params, direction='up'}) {
 	const {bubbling=true} = !isObject(params[0])?{}:params[0];
 	const stopped = getStoppedFunc(...params);
 	const NEXT = ((direction==='up')?PARENT:((direction==='down')?CHILDREN:undefined));
+	const throwOnNoErrorListener = $private.get(target, 'throwOnNoErrorListener');
 
 	let hasListeners = false;
 	makeArray(eventName).forEach(eventName=>{
@@ -75,7 +76,9 @@ function emit({emitter, target, eventName, params, direction='up'}) {
 
 		});
 		hasListeners = hasListeners || _hasListeners;
-		if (!_hasListeners && (eventName === 'error')) throw new Error('Error event emitted but nothing to capture it');
+		if (throwOnNoErrorListener && !_hasListeners && (eventName === 'error')) {
+			throw new Error('Error event emitted but nothing to capture it');
+		}
 	});
 	return hasListeners;
 }
@@ -86,6 +89,7 @@ async function emitAsync({emitter, target, eventName, params, direction='up'}) {
 	const stopped = getStoppedFunc(...params);
 	const NEXT = ((direction==='up')?PARENT:((direction==='down')?CHILDREN:undefined));
 	const parent = (!!NEXT?$private.get(emitter, NEXT, []):[]);
+	const throwOnNoErrorListener = $private.get(target, 'throwOnNoErrorListener');
 
 	let hasListeners = false;
 	for (let eventsNo=0; eventsNo<eventNames.length; eventsNo++) {
@@ -101,7 +105,9 @@ async function emitAsync({emitter, target, eventName, params, direction='up'}) {
 			}
 		}
 		hasListeners = hasListeners || _hasListeners;
-		if (!_hasListeners && (eventNames[eventsNo] === 'error')) throw new Error('Error event emitted but nothing to capture it');
+		if (throwOnNoErrorListener && !_hasListeners && (eventNames[eventsNo] === 'error')) {
+			throw new Error('Error event emitted but nothing to capture it');
+		}
 	}
 
 	return hasListeners;
@@ -373,11 +379,12 @@ export class HierarchyEventEmitter {
 	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	on(target, eventName, ...listener) {
+		const emitEvents = [newListenerEvent];
+		if ($private.get(target, 'emitNodeEmitterEvents')) emitEvents.push('newListener');
+
 		makeArray(eventName).forEach(eventName=>{
 			getListenersByInstance(this, target, eventName).push(...listener);
-			listener.forEach(listener=>this.emit(
-				target, newListenerEvent, new NewListenerEvent({target, listener})
-			));
+			listener.forEach(listener=>this.emit(target, emitEvents, new NewListenerEvent({target, listener})));
 			if (!maxListenerWarnings.has(eventName)) {
 				const count = this.listenerCount(target, eventName);
 				if (count > this.getMaxListeners(target)) {
@@ -461,11 +468,12 @@ export class HierarchyEventEmitter {
 	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining.
 	 */
 	removeListener(target, eventName, ...listener) {
+		const emitEvents = [newListenerEvent];
+		if ($private.get(target, 'emitNodeEmitterEvents')) emitEvents.push('removeListener');
+
 		makeArray(eventName).forEach(eventName=>{
 			pull(getListenersByInstance(this, target, eventName), ...listener);
-			listener.forEach(listener=>this.emit(
-				target, removeListenerEvent, new RemoveListenerEvent({target, listener})
-			));
+			listener.forEach(listener=>this.emit(target, emitEvents, new RemoveListenerEvent({target, listener})));
 		});
 		return this;
 	}
@@ -497,11 +505,12 @@ export class HierarchyEventEmitter {
 	 * @returns {HierarchyEventEmitter}							The current TargetEventEmitter for chaining
 	 */
 	prependListener(target, eventName, ...listener) {
+		const emitEvents = [newListenerEvent];
+		if ($private.get(target, 'emitNodeEmitterEvents')) emitEvents.push('newListener');
+
 		makeArray(eventName).forEach(eventName=>{
 			getListenersByInstance(this, target, eventName).unshift(...listener);
-			listener.forEach(listener=>this.emit(
-				target, newListenerEvent, new NewListenerEvent({target, listener})
-			));
+			listener.forEach(listener=>this.emit(target, emitEvents, new NewListenerEvent({target, listener})));
 			if (!maxListenerWarnings.has(eventName)) {
 				const count = this.listenerCount(target, eventName);
 				if (count > this.getMaxListeners(target)) {
